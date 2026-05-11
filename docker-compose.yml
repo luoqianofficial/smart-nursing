@@ -1,16 +1,31 @@
 version: '3.8'
 
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: smart-nursing-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-reincarnation22}
+      MYSQL_DATABASE: smart_nursing
+    ports:
+      - "3307:3306" # 将宿主机的 3307 映射到容器的 3306
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
   minio:
     image: minio/minio:latest
     container_name: minio
     restart: always
     ports:
-      - "9000:9000"   # API 端口
-      - "9001:9001"   # Web 控制台端口
+      - "9000:9000"
+      - "9001:9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: Admin_password123
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-Admin_password123}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -18,16 +33,30 @@ services:
       - app-network
 
   admin:
-    build: ./smart-nursing-admin   # 指定 Dockerfile 所在的目录
+    build: ./smart-nursing-admin
     container_name: smart-nursing-admin
     restart: always
     ports:
       - "8080:8080"
     environment:
-      # 让 Spring Boot 通过服务名 "minio" 访问 MinIO
+      # 数据库配置 (注意 DB_HOST 必须是 mysql 服务名)
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: smart_nursing
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-reincarnation22}
+
+      # MinIO 配置
       MINIO_ENDPOINT: http://minio:9000
-      # 也可以传递其他环境变量，如数据库连接等
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-Admin_password123}
+      MINIO_BUCKET: smart-nursing-bucket
+
+      # JWT 配置
+      JWT_SECRET: ${JWT_SECRET:-ek0MfaXZYucOfCtJnud3Tld68Qx3JOjv}
+      JWT_EXPIRE: 86400000
     depends_on:
+      - mysql
       - minio
     networks:
       - app-network
@@ -38,3 +67,4 @@ networks:
 
 volumes:
   minio_data:
+  mysql_data:
