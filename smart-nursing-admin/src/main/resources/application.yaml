@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: smart-nursing-admin
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:smart_nursing}?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: ${DB_USERNAME:root}          # 你的数据库用户名
+    password: ${DB_PASSWORD:your_password_here}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 100MB      # 单个文件最大大小
+      max-request-size: 100MB   # 整个请求最大大小
+
+  # 如果使用 MyBatis-Plus，可额外配置（可选）
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  # 打印 SQL 日志，方便调试
+  global-config:
+    db-config:
+      id-type: auto
+
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}    # MinIO API 地址
+  access-key: ${MINIO_ACCESS_KEY:admin}
+  secret-key: ${MINIO_SECRET_KEY:your_secret_key_here}
+  bucket: ${MINIO_BUCKET:smart-nursing-bucket}       # 你自己创建的桶名称
+
+jwt:
+  secret: ${JWT_SECRET:your_jwt_secret_key_here_minimum_32_chars}
+  expire: ${JWT_EXPIRE:86400000}
+
+

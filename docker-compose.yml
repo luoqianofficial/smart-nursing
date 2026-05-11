@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: always
+    ports:
+      - "9000:9000"   # API 端口
+      - "9001:9001"   # Web 控制台端口
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: Admin_password123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - app-network
+
+  admin:
+    build: ./smart-nursing-admin   # 指定 Dockerfile 所在的目录
+    container_name: smart-nursing-admin
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # 让 Spring Boot 通过服务名 "minio" 访问 MinIO
+      MINIO_ENDPOINT: http://minio:9000
+      # 也可以传递其他环境变量，如数据库连接等
+    depends_on:
+      - minio
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  minio_data:
