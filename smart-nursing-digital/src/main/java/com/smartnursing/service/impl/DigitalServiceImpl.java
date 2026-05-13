@@ -1,6 +1,8 @@
 package com.smartnursing.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.smartnursing.entity.DigitalPlayLog;
 import com.smartnursing.entity.DigitalResource;
@@ -12,6 +14,7 @@ import com.smartnursing.service.DigitalService;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.http.Method;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,8 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.Date;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 
@@ -39,6 +41,8 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
 
     @Autowired
     private FileInfoMapper fileInfoMapper;
+
+
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -141,6 +145,7 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean play(Long resourceId, Long userId) {
         //业务埋点方法。前端在开始播放（或用户点击播放按钮）时，应额外调用一次 /play?resourceId=xxx 接口，通知后端增加播放次数、记录日志。这样播放量的统计就和实际播放行为分离，互不影响。
         //只统计，不处理播放
@@ -165,6 +170,8 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
 
     @Override
     public String createShareUrl(Long resourceId, Long userId) {
+
+        play(resourceId, userId);
         String objectName = getFileObjectNameByResourceId(resourceId, userId);
 
         try {
@@ -197,7 +204,6 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
         if (resource == null) {
             return false;
         }
-        // TODO: 当前仅允许创建者删除，后续可根据需求扩展为：创建者 + 管理员 + 特定角色
         if (!resource.getCreateUserId().equals(userId)) {
             throw new RuntimeException("无权删除该资源");
         }
@@ -206,7 +212,7 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
         if (fileInfo != null) {
             try {
                 minioClient.removeObject(
-                        io.minio.RemoveObjectArgs.builder()
+                        RemoveObjectArgs.builder()
                                 .bucket("smart-nursing-bucket")
                                 .object(fileInfo.getFileName())
                                 .build()
@@ -217,11 +223,87 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
             fileInfoMapper.deleteById(fileInfo.getId());
         }
 
+        LambdaQueryWrapper<DigitalPlayLog> logWrapper = new LambdaQueryWrapper<>();
+        logWrapper.eq(DigitalPlayLog::getResourceId, resourceId);
+        digitalPlayLogMapper.delete(logWrapper);
+
         digitalResourceMapper.deleteById(resourceId);
         return true;
 
     }
 
+    @Override
+    public boolean updateResource(DigitalResource resource) {
+        Long resourceId = resource.getId();
+        DigitalResource originaldigitalResource = digitalResourceMapper.selectById(resourceId);
+        if (null==originaldigitalResource){
+            return false;
+        }
+        int affectedrows = digitalResourceMapper.updateById(resource);
+        if (affectedrows==0){
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public Page<DigitalResource> getResourcePage(int pageNum, int pageSize, String resourceName, Integer mediaType, Integer status) {
+        Page<DigitalResource> page=new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<DigitalResource> querywrapper=new LambdaQueryWrapper<>();
+        querywrapper.like(resourceName!=null,DigitalResource::getResourceName,resourceName)
+                .eq(mediaType!=null,DigitalResource::getMediaType,mediaType)
+                .eq(status!=null,DigitalResource::getStatus,status)
+                .orderByDesc(DigitalResource::getCreateTime);
+
+        digitalResourceMapper.selectPage(page,querywrapper);
+        return page;
+    }
+
+    @Override
+    public boolean updateStatus(Long resourceId, Integer status) {
+        DigitalResource digitalResource=new DigitalResource();
+        digitalResource.setStatus(status);
+        digitalResource.setId(resourceId);
+
+        int affectedrows = digitalResourceMapper.updateById(digitalResource);
+        if(affectedrows==0){
+            return false;
+        }
+        return true;
+
+    }
+
+
+    @Override
+    public Page<DigitalPlayLog> getPlayLogPage(int pageNum, int pageSize, Long userId, Long resourceId) {
+        Page<DigitalPlayLog> page=new Page<>(pageNum,pageSize);
+
+        LambdaQueryWrapper<DigitalPlayLog> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(userId != null, DigitalPlayLog::getUserId, userId)
+                .eq(resourceId != null, DigitalPlayLog::getResourceId, resourceId)
+
+                .orderByDesc(DigitalPlayLog::getPlayTime);
+
+        digitalPlayLogMapper.selectPage(page, queryWrapper);
+
+        return page;
+
+    }
+
+    @Override
+    public Map<Integer, Long> getPlayCountByMediaType() {
+        List<DigitalResource> digitalResources = digitalResourceMapper.selectList(null);
+        Map<Integer, Long> playcount =  new HashMap<>();
+        for ( DigitalResource digitalResource : digitalResources) {
+            Integer mediaType = digitalResource.getMediaType();
+            Long visitCount = digitalResource.getVisitCount();
+
+            playcount.compute(mediaType, (key, oldValue) ->
+                    oldValue == null ? visitCount : oldValue + visitCount
+            );
+        }
+        return playcount;
+    }
 
 
 }

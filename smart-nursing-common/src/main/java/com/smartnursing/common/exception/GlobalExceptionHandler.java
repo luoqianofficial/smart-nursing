@@ -9,15 +9,27 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     /**
-     * 出现异常返回错误提示, 并且回滚事务
-     * @param e
-     * @return
+     * 处理业务逻辑异常
+     * @param e 业务异常
+     * @return 统一错误响应
+     */
+    @ExceptionHandler(ServiceException.class)
+    @ResponseBody
+    public CommonResult<?> handleServiceException(ServiceException e){
+        return CommonResult.error(e.getCode(), e.getMessage());
+    }
+
+    /**
+     * 处理系统异常
+     * @param e 系统异常
+     * @return 统一错误响应
      */
     @ExceptionHandler(Exception.class)
     @ResponseBody
-    public CommonResult exceptionHandler(Exception e){
-        System.err.println("捕获到异常");
+    public CommonResult<?> handleException(Exception e){
         e.printStackTrace();
         return CommonResult.error(GlobalErrorCodeConstants.INTERNAL_SERVER_ERROR);
     }
+
+
 }

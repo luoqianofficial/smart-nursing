@@ -31,8 +31,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // 3. 授权规则（白名单放开登录、注册、静态资源等）
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/user/login", "/user/register", "/doc.html", "/webjars/**", "/v3/api-docs/**").permitAll()
-                        .anyRequest().authenticated()  // 其他都要认证
+                        .requestMatchers("/user/login", "/user/register").permitAll()
+                        .requestMatchers("/doc.html", "/webjars/**", "/v3/api-docs/**", "/swagger-resources/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 // 4. 关闭默认的表单登录（否则还会出现登录页）

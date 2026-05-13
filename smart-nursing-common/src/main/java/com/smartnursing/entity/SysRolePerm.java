@@ -12,7 +12,8 @@ import lombok.Data;
 @TableName(value ="sys_role_perm")
 @Data
 public class SysRolePerm {
-    @TableId
+    @TableId(type = IdType.AUTO)
+
     private Long roleId;
 
     private Long permId;

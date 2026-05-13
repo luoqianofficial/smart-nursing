@@ -11,6 +11,11 @@ import com.smartnursing.mapper.SysUserMapper;
 import com.smartnursing.service.SysUserRoleService;
 import com.smartnursing.smartnursingadmin.security.LoginUserDetails;
 import com.smartnursing.smartnursingadmin.utils.JwtUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -39,10 +44,8 @@ import static com.smartnursing.common.enums.GlobalErrorCodeConstants.USERNAME_EX
 
 /**
  * 用户相关 HTTP 接口：登录、注册等。
- * <p>
- * 注册时用户只写入 {@code sys_user} 表；与角色的关系写入 {@code sys_user_role}（用户-角色多对多），
- * 不在用户表上冗余角色字段。
  */
+@Tag(name = "用户管理", description = "用户登录、注册、权限管理等相关接口")
 @RestController
 @RequestMapping("/user")
 public class UserController {
@@ -76,11 +79,18 @@ public class UserController {
     @Autowired
     private SysRoleMapper sysRoleMapper;
 
-    /**
-     * 登录：校验用户名密码，成功返回 JWT、用户标识、权限码与角色列表（供前端路由与按钮控制）。
-     * <p>
-     * POST /user/login，请求体示例：{@code {"username":"admin","password":"password"}}
-     */
+
+    @Operation(
+            summary = "用户登录",
+            description = "使用用户名和密码进行登录，成功后返回 JWT Token、用户信息和权限列表",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "登录成功",
+                            content = @Content(schema = @Schema(implementation = LoginResponse.class))),
+                    @ApiResponse(responseCode = "402", description = "账号或密码错误"),
+                    @ApiResponse(responseCode = "400", description = "请求参数不正确")
+            }
+    )
+
     @PostMapping("/login")
     public CommonResult<LoginResponse> login(@RequestBody LoginRequest loginRequest) {
 
@@ -124,22 +134,39 @@ public class UserController {
 
 
     /** 登录成功返回体：含 token、账号、用户 id、权限标识、角色简要信息。 */
+    @io.swagger.v3.oas.annotations.media.Schema(description = "登录响应数据")
     public record LoginResponse(
+            @io.swagger.v3.oas.annotations.media.Schema(description = "JWT Token", example = "eyJhbGciOiJIUzI1NiJ9...")
             String token,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "用户名", example = "admin")
             String username,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "用户ID", example = "1")
             Long userId,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "权限列表", example = "[\"user:query\", \"user:edit\"]")
             List<String> permissions,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "角色列表")
             List<RoleBrief> roles
     ) {
     }
 
-    public record RoleBrief(Long roleId, String roleCode, String roleName) {
+    @io.swagger.v3.oas.annotations.media.Schema(description = "角色简要信息")
+    public record RoleBrief(
+            @io.swagger.v3.oas.annotations.media.Schema(description = "角色ID", example = "1")
+            Long roleId,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "角色编码", example = "ADMIN")
+            String roleCode,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "角色名称", example = "管理员")
+            String roleName
+    ) {
     }
 
     /** 登录请求 JSON 对应字段。 */
     @Data
+    @io.swagger.v3.oas.annotations.media.Schema(description = "登录请求参数")
     public static class LoginRequest {
+        @io.swagger.v3.oas.annotations.media.Schema(description = "用户名", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED, example = "admin")
         private String username;
+        @io.swagger.v3.oas.annotations.media.Schema(description = "密码", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED, example = "123456")
         private String password;
 
         public String getUsername() { return username; }
@@ -150,23 +177,19 @@ public class UserController {
 
     /** 注册请求 JSON 对应字段。 */
     @Data
+    @io.swagger.v3.oas.annotations.media.Schema(description = "注册请求参数")
     public static class RegisterRequest {
-        /** 登录账号，必填；服务端会 trim 掉首尾空格。 */
+        @io.swagger.v3.oas.annotations.media.Schema(description = "登录账号", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED, example = "newuser")
         private String username;
-        /** 明文密码，必填；入库前会 BCrypt 加密，不会存明文。 */
+        @io.swagger.v3.oas.annotations.media.Schema(description = "明文密码", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED, example = "123456")
         private String password;
-        /** 真实姓名，可选。 */
+        @io.swagger.v3.oas.annotations.media.Schema(description = "真实姓名", example = "张三")
         private String realName;
-        /** 手机号，可选。 */
+        @io.swagger.v3.oas.annotations.media.Schema(description = "手机号", example = "13800138000")
         private String phone;
-        /**
-         * 科室 id，可选；不传时下面代码里写死默认 1L，你可按实际业务改成查默认科室或改为必填。
-         */
+        @io.swagger.v3.oas.annotations.media.Schema(description = "科室ID", example = "1")
         private Long deptId;
-        /**
-         * 要绑定的角色 id 列表，写入中间表 {@code sys_user_role}，与 {@code sys_role} 多对多。
-         * 不传、传空列表、或全是 null 时，使用本类常量 {@link #DEFAULT_REGISTER_ROLE_ID} 作为唯一默认角色。
-         */
+        @io.swagger.v3.oas.annotations.media.Schema(description = "角色ID列表", example = "[2, 3]")
         private List<Long> roleIds;
     }
 
@@ -179,13 +202,17 @@ public class UserController {
     public record RegisterResponse(Long userId, String username) {
     }
 
-    /**
-     * 用户注册：先校验参数与用户名唯一性，再插入用户，再批量插入用户-角色关联。
-     * <p>
-     * {@code @Transactional}：插入用户与写入 {@code sys_user_role} 在同一事务里，任一步失败整单回滚。
-     * 下面部分分支用 {@code setRollbackOnly()}，是因为捕获了异常或返回了业务错误码但仍从方法正常返回，
-     * 需要显式标记「当前事务回滚」，否则 Spring 可能误以为要提交。
-     */
+    @Operation(
+            summary = "用户注册",
+            description = "新用户注册接口，自动分配默认角色，支持指定多个角色",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "注册成功",
+                            content = @Content(schema = @Schema(implementation = RegisterResponse.class))),
+                    @ApiResponse(responseCode = "409", description = "用户名已存在"),
+                    @ApiResponse(responseCode = "400", description = "请求参数不正确"),
+                    @ApiResponse(responseCode = "500", description = "系统异常")
+            }
+    )
     @PostMapping("/register")
     @Transactional(rollbackFor = Exception.class)
     public CommonResult<RegisterResponse> register(@RequestBody RegisterRequest registerRequest) {
