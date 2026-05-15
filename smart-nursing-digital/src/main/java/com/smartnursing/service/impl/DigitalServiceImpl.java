@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.smartnursing.common.enums.FileTypeEnum;
 import com.smartnursing.entity.DigitalPlayLog;
 import com.smartnursing.entity.DigitalResource;
 import com.smartnursing.entity.FileInfo;
@@ -108,24 +109,23 @@ public class DigitalServiceImpl extends ServiceImpl<DigitalResourceMapper, Digit
     }
 
     private Integer detectMediaType(String extension) {
-        if (extension == null) return 4; // 未知类型
+        if (extension == null) {
+            return FileTypeEnum.DOCUMENT.getCode(); // 默认归为文档/其他
+        }
+
         String ext = extension.toLowerCase();
 
-        // 1: 视频
         if (ext.matches("\\.(mp4|avi|mov|wmv|flv|mkv|webm)$")) {
-            return 1;
+            return FileTypeEnum.VIDEO.getCode();
         }
-        // 2: 音频
         else if (ext.matches("\\.(mp3|wav|aac|flac|m4a)$")) {
-            return 2;
+            return FileTypeEnum.AUDIO.getCode();
         }
-        // 3: 图片
         else if (ext.matches("\\.(jpg|jpeg|png|gif|bmp|webp|svg)$")) {
-            return 3;
+            return FileTypeEnum.IMAGE.getCode();
         }
-        // 4: 文档/其他
         else {
-            return 4;
+            return FileTypeEnum.DOCUMENT.getCode();
         }
     }
 
